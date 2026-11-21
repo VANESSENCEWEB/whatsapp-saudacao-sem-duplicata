@@ -1,0 +1,267 @@
+{
+  "name": "Saudação com buffer (exemplo)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "teste-saudacao-buffer",
+        "options": {}
+      },
+      "id": "be266f81-821d-4416-be67-adbb7146ee7d",
+      "name": "Recebe Mensagem (TESTE)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        240,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "conv",
+              "name": "conversation_id",
+              "value": "={{ $json.body?.conversation_id ?? $json.conversation_id ?? 999001 }}",
+              "type": "number"
+            },
+            {
+              "id": "cont",
+              "name": "content",
+              "value": "={{ $json.body?.content ?? $json.content ?? \"\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c700941e-826f-4259-b143-6eaca49fec78",
+      "name": "Normaliza Dados",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        464,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "insert into public.message_buffer (conversation_id, content) values ($1, $2) returning id, conversation_id;",
+        "options": {
+          "queryReplacement": "={{ [ $json.conversation_id, $json.content ] }}"
+        }
+      },
+      "id": "0b72ee2f-b6ca-4510-b6a3-fc4e34e9f548",
+      "name": "Grava no Buffer",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        688,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 30
+      },
+      "id": "bbb67cb3-6265-44fc-b7f6-dc47d441f60f",
+      "name": "Espera 30s",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        912,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "with marcadas as (\n  update public.message_buffer b\n     set processed = true\n   where b.conversation_id = $1\n     and b.processed = false\n     and not exists (\n       select 1 from public.message_buffer n\n        where n.conversation_id = $1\n          and n.id > $2\n     )\n  returning b.id, b.content\n)\nselect count(*)::int as total,\n       coalesce(string_agg(content, ' | ' order by id), '') as mensagens\n  from marcadas;",
+        "options": {
+          "queryReplacement": "={{ [ $('Grava no Buffer').item.json.conversation_id, $('Grava no Buffer').item.json.id ] }}"
+        }
+      },
+      "id": "63eb55b7-31e5-45ff-97b4-adaf430d5b8f",
+      "name": "Sou a última?",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1120,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.total }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f63a2901-f78a-46ed-aa50-6288e8423747",
+      "name": "É a última?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1344,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "resp",
+              "name": "resposta",
+              "value": "Olá! Seja bem-vindo(a). [TESTE: nada foi enviado ao WhatsApp]",
+              "type": "string"
+            },
+            {
+              "id": "conv2",
+              "name": "conversation_id",
+              "value": "={{ $('Grava no Buffer').item.json.conversation_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "28296bad-756d-41f1-ab06-e8f6ddf76cb1",
+      "name": "Responde (simulado)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1568,
+        208
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "fba7603f-6026-481a-a244-abe9bc99d076",
+      "name": "Ignora (não é a última)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## TESTE - Buffer anti-saudação duplicada\nFluxo de TESTE. Não recebe mensagens reais (endereço próprio) e não envia nada ao WhatsApp.\nUsa a tabela message_buffer.\n\n1. Grava cada mensagem no buffer\n2. Espera 30s\n3. Só a execução da ÚLTIMA mensagem segue para responder",
+        "height": 200,
+        "width": 1180,
+        "color": 3
+      },
+      "id": "394c0288-9643-4863-8a66-c567e69fd4fe",
+      "name": "Sticky Note 1c55cf83",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        176,
+        64
+      ]
+    }
+  ],
+  "connections": {
+    "Recebe Mensagem (TESTE)": {
+      "main": [
+        [
+          {
+            "node": "Normaliza Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normaliza Dados": {
+      "main": [
+        [
+          {
+            "node": "Grava no Buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grava no Buffer": {
+      "main": [
+        [
+          {
+            "node": "Espera 30s",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Espera 30s": {
+      "main": [
+        [
+          {
+            "node": "Sou a última?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sou a última?": {
+      "main": [
+        [
+          {
+            "node": "É a última?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "É a última?": {
+      "main": [
+        [
+          {
+            "node": "Responde (simulado)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignora (não é a última)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "nodeGroups": []
+}
